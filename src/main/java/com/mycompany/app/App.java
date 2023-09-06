@@ -144,7 +144,7 @@ public class App {
                 primesMain.execute(JSON);
                 long took = System.currentTimeMillis() - start;
                 sum += took;
-                System.out.println("iteration: " + took);
+                System.out.println("iteration: " + took + " ms");
             }
         }catch (Exception e){
             e.printStackTrace();
