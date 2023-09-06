@@ -40,13 +40,13 @@
  */
 package com.mycompany.app;
 
+import com.google.common.io.Resources;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Value;
-import javax.script.ScriptEngineManager;
-import javax.script.ScriptEngine;
-import javax.script.Invocable;
 import java.io.IOException;
-import org.graalvm.polyglot.Source;
+import java.nio.charset.Charset;
+import java.util.Objects;
+
 
 /**
  * Simple benchmark for Graal.js via GraalVM Polyglot Context and ScriptEngine.
@@ -54,7 +54,7 @@ import org.graalvm.polyglot.Source;
 public class App {
 
     public static final int WARMUP = 30;
-    public static final int ITERATIONS = 10;
+    public static final int ITERATIONS = 50;
     public static final String BENCHFILE = "src/bench.js";
 
     public static final String SOURCE = ""
@@ -111,77 +111,44 @@ public class App {
             + "    if (primArray[N] != EXPECTED) { throw new Error('wrong prime found: '+primArray[N]); }\n"
             + "}\n";
 
+    public static final String SCRIPT;
+    public static final String JSON;
+
+    static {
+        try {
+            SCRIPT = Resources.toString(Objects.requireNonNull(App.class.getClassLoader().getResource("processor.js")), Charset.defaultCharset());
+            JSON = Resources.toString(Objects.requireNonNull(App.class.getClassLoader().getResource("story.json")), Charset.defaultCharset());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         benchGraalPolyglotContext();
-        benchGraalScriptEngine();
-        benchNashornScriptEngine();
     }
 
     static long benchGraalPolyglotContext() throws IOException {
         System.out.println("=== Graal.js via org.graalvm.polyglot.Context === ");
         long sum = 0;
-        try (Context context = Context.create()) {
-            context.eval(Source.newBuilder("js", SOURCE, "src.js").build());
-            Value primesMain = context.getBindings("js").getMember("primesMain");
+        try  {
+            Context context = Context.create();
+            context.eval("js", SCRIPT);
+            Value primesMain = context.getBindings("js").getMember("processBlocksAndActions");
             System.out.println("warming up ...");
             for (int i = 0; i < WARMUP; i++) {
-                primesMain.execute();
+                primesMain.execute(JSON);
             }
             System.out.println("warmup finished, now measuring");
             for (int i = 0; i < ITERATIONS; i++) {
                 long start = System.currentTimeMillis();
-                primesMain.execute();
+                primesMain.execute(JSON);
                 long took = System.currentTimeMillis() - start;
                 sum += took;
                 System.out.println("iteration: " + took);
             }
-        } // context.close() is automatic
-        return sum;
-    }
-
-    static long benchNashornScriptEngine() throws IOException {
-        System.out.println("=== Nashorn via javax.script.ScriptEngine ===");
-        ScriptEngine nashornEngine = new ScriptEngineManager().getEngineByName("nashorn");
-        if (nashornEngine == null) {
-            System.out.println("*** Nashorn not found ***");
-            return 0;
-        } else {
-            return benchScriptEngineIntl(nashornEngine);
-        }
-    }
-
-    static long benchGraalScriptEngine() throws IOException {
-        System.out.println("=== Graal.js via javax.script.ScriptEngine ===");
-        ScriptEngine graaljsEngine = new ScriptEngineManager().getEngineByName("graal.js");
-        if (graaljsEngine == null) {
-            System.out.println("*** Graal.js not found ***");
-            return 0;
-        } else {
-            return benchScriptEngineIntl(graaljsEngine);
-        }
-    }
-
-    private static long benchScriptEngineIntl(ScriptEngine eng) throws IOException {
-        long sum = 0L;
-        try {
-            eng.eval(SOURCE);
-            Invocable inv = (Invocable) eng;
-            System.out.println("warming up ...");
-            for (int i = 0; i < WARMUP; i++) {
-                inv.invokeFunction("primesMain");
-            }
-            System.out.println("warmup finished, now measuring");
-            for (int i = 0; i < ITERATIONS; i++) {
-                long start = System.currentTimeMillis();
-                inv.invokeFunction("primesMain");
-                long took = System.currentTimeMillis() - start;
-                sum += took;
-                System.out.println("iteration: " + (took));
-            }
-        } catch (Exception ex) {
-            System.out.println(ex);
+        }catch (Exception e){
+            e.printStackTrace();
         }
         return sum;
     }
-
 }
